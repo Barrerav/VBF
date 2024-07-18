@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pressure Vessel Calculation</title>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f4f7fa;
+            color: #444;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s;
+        }
+
+        .container:hover {
+            transform: translateY(-10px);
+        }
+
+        h1 {
+            text-align: center;
+            color: #4A90E2;
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        p {
+            text-align: center;
+            color: #777;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #4A90E2;
+            font-weight: bold;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 1em;
+            background-color: #fafafa;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, select:focus {
+            border-color: #4A90E2;
+            outline: none;
+        }
+
+        .button-group {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        button {
+            width: 48%;
+            padding: 12px;
+            background-color: #4A90E2;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.3s;
+        }
+
+        button:hover {
+            background-color: #357ABD;
+            transform: translateY(-2px);
+        }
+
+        #results {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #E6F7FF;
+            border: 1px solid #B3E5FC;
+            border-radius: 6px;
+            display: none;
+        }
+
+        #results h3 {
+            margin-top: 0;
+            color: #4A90E2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Pressure Vessel Calculation</h1>
+        <p>By Vicente Barrera</p>
+        <form id="calcForm">
+            <div class="form-group">
+                <label for="calculationType">Calculation Type:</label>
+                <select id="calculationType" required>
+                    <option value="shell">Shell</option>
+                    <option value="head">Head</option>
+                </select>
+            </div>
+            <div class="form-group" id="headTypeGroup" style="display: none;">
+                <label for="headType">Head Type:</label>
+                <select id="headType">
+                    <option value="ellipsoidal">Ellipsoidal</option>
+                    <option value="torispherical">Torispherical</option>
+                    <option value="hemispherical">Hemispherical</option>
+                    <option value="conical">Conical</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="pressure">Pressure (bar):</label>
+                <input type="number" id="pressure" step="0.01" required>
+            </div>
+            <div class="form-group">
+                <label for="diameter">Internal Diameter (mm):</label>
+                <input type="number" id="diameter" step="0.01" required>
+            </div>
+            <div class="form-group">
+                <label for="stress">Allowable Stress (MPa):</label>
+                <input type="number" id="stress" step="0.01" required>
+            </div>
+            <div class="form-group">
+                <label for="efficiency">Joint Efficiency:</label>
+                <input type="number" id="efficiency" step="0.01" required>
+            </div>
+            <div class="form-group" id="angleGroup" style="display: none;">
+                <label for="angle">Half Apex Angle (degrees):</label>
+                <input type="number" id="angle" step="0.1">
+            </div>
+            <div class="form-group">
+                <label for="corrosion">Corrosion Allowance (mm):</label>
+                <input type="number" id="corrosion" step="0.01" required>
+            </div>
+            <div class="button-group">
+                <button type="submit">Calculate</button>
+                <button type="button" id="resetButton">Reset</button>
+            </div>
+        </form>
+        <div id="results"></div>
+    </div>
+    <script>
+        document.getElementById('calculationType').addEventListener('change', function() {
+            const headTypeGroup = document.getElementById('headTypeGroup');
+            if (this.value === 'head') {
+                headTypeGroup.style.display = 'block';
+            } else {
+                headTypeGroup.style.display = 'none';
+                document.getElementById('angleGroup').style.display = 'none';
+            }
+        });
+
+        document.getElementById('headType').addEventListener('change', function() {
+            const angleGroup = document.getElementById('angleGroup');
+            if (this.value === 'conical') {
+                angleGroup.style.display = 'block';
+            } else {
+                angleGroup.style.display = 'none';
+            }
+        });
+
+        document.getElementById('calcForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            const calculationType = document.getElementById('calculationType').value;
+            const pressure = parseFloat(document.getElementById('pressure').value) * 100000; // Convert bar to Pa
+            const diameter = parseFloat(document.getElementById('diameter').value) / 1000; // Convert mm to m
+            const radius = diameter / 2; // Convert diameter to radius
+            const stress = parseFloat(document.getElementById('stress').value) * 1000000; // Convert MPa to Pa
+            const efficiency = parseFloat(document.getElementById('efficiency').value);
+            const corrosionAllowance = parseFloat(document.getElementById('corrosion').value) / 1000; // Convert mm to m
+
+            let t_min, p_max;
+
+            if (calculationType === 'shell') {
+                // Calculation for shell
+                let t1 = (pressure * radius) / (stress * efficiency - 0.6 * pressure);
+                let p1 = (stress * efficiency * t1) / (radius + 0.6 * t1);
+
+                let t2 = (pressure * radius) / (2 * stress * efficiency + 0.4 * pressure);
+                let p2 = (2 * stress * efficiency * t2) / (radius - 0.4 * t2);
+
+                t_min = (Math.max(t1, t2) + corrosionAllowance) * 1000; // Convert to mm and add corrosion allowance
+                p_max = Math.min(
+                    (stress * efficiency * (t_min / 1000)) / (radius + 0.6 * (t_min / 1000)),
+                    (2 * stress * efficiency * (t_min / 1000)) / (radius - 0.4 * (t_min / 1000))
+                ) / 100000; // Convert to bar
+
+            } else if (calculationType === 'head') {
+                const headType = document.getElementById('headType').value;
+
+                if (headType === 'ellipsoidal') {
+                    // Calculation for ellipsoidal head
+                    t_min = ((pressure * diameter) / (2 * stress * efficiency - 0.2 * pressure) + corrosionAllowance) * 1000; // Convert to mm and add corrosion allowance
+                    p_max = (2 * stress * efficiency * (t_min / 1000)) / (diameter + 0.2 * (t_min / 1000)) / 100000; // Convert to bar
+
+                } else if (headType === 'torispherical') {
+                    // Calculation for torispherical head
+                    t_min = ((0.885 * pressure * diameter) / (stress * efficiency - 0.1 * pressure) + corrosionAllowance) * 1000; // Convert to mm and add corrosion allowance
+                    p_max = (stress * efficiency * (t_min / 1000)) / (0.885 * diameter + 0.1 * (t_min / 1000)) / 100000; // Convert to bar
+
+                } else if (headType === 'hemispherical') {
+                    // Calculation for hemispherical head
+                    t_min = ((pressure * radius) / (2 * stress * efficiency - 0.2 * pressure) + corrosionAllowance) * 1000; // Convert to mm and add corrosion allowance
+                    p_max = (2 * stress * efficiency * (t_min / 1000)) / (radius + 0.2 * (t_min / 1000)) / 100000; // Convert to bar
+
+                } else if (headType === 'conical') {
+                    // Calculation for conical head
+                    const angle = parseFloat(document.getElementById('angle').value) * (Math.PI / 180); // Convert degrees to radians
+                    t_min = ((pressure * diameter) / (2 * Math.cos(angle) * (stress * efficiency - 0.6 * pressure)) + corrosionAllowance) * 1000; // Convert to mm and add corrosion allowance
+                    p_max = (2 * stress * efficiency * (t_min / 1000) * Math.cos(angle)) / (diameter + 1.2 * (t_min / 1000) * Math.cos(angle)) / 100000; // Convert to bar
+                }
+            }
+
+            document.getElementById('results').style.display = 'block';
+            document.getElementById('results').innerHTML = `
+                <h3>Results</h3>
+                <p>Minimum Thickness (including corrosion allowance): ${t_min.toFixed(2)} mm</p>
+                <p>Maximum Allowable Working Pressure: ${p_max.toFixed(2)} bar</p>
+            `;
+        });
+
+        document.getElementById('resetButton').addEventListener('click', function() {
+            document.getElementById('calcForm').reset();
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('headTypeGroup').style.display = 'none';
+            document.getElementById('angleGroup').style.display = 'none';
+        });
+    </script>
+</body>
+</html>
