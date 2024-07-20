@@ -89,7 +89,7 @@
             transform: translateY(-2px);
         }
 
-        #results {
+        #results, #finalThicknessForm {
             margin-top: 20px;
             padding: 20px;
             background-color: #E6F7FF;
@@ -98,7 +98,7 @@
             display: none;
         }
 
-        #results h3 {
+        #results h3, #finalThicknessForm h3 {
             margin-top: 0;
             color: #4A90E2;
         }
@@ -155,6 +155,14 @@
             </div>
         </form>
         <div id="results"></div>
+        <div id="finalThicknessForm">
+            <h3>Recalculate with Final Thickness</h3>
+            <div class="form-group">
+                <label for="finalThickness">Final Thickness (mm):</label>
+                <input type="number" id="finalThickness" step="0.01">
+            </div>
+            <button type="button" id="recalculateButton">Recalculate</button>
+        </div>
     </div>
     <script>
         document.getElementById('calculationType').addEventListener('change', function() {
@@ -176,6 +184,27 @@
             }
         });
 
+        function calculateMAWP(t_min, diameter, radius, stress, efficiency, corrosionAllowance, calculationType, headType, angle) {
+            let p_max;
+            if (calculationType === 'shell') {
+                p_max = Math.min(
+                    (stress * efficiency * (t_min / 1000)) / (radius + 0.6 * (t_min / 1000)),
+                    (2 * stress * efficiency * (t_min / 1000)) / (radius - 0.4 * (t_min / 1000))
+                ) / 100000; // Convert to bar
+            } else if (calculationType === 'head') {
+                if (headType === 'ellipsoidal') {
+                    p_max = (2 * stress * efficiency * (t_min / 1000)) / (diameter + 0.2 * (t_min / 1000)) / 100000; // Convert to bar
+                } else if (headType === 'torispherical') {
+                    p_max = (stress * efficiency * (t_min / 1000)) / (0.885 * diameter + 0.1 * (t_min / 1000)) / 100000; // Convert to bar
+                } else if (headType === 'hemispherical') {
+                    p_max = (2 * stress * efficiency * (t_min / 1000)) / (radius + 0.2 * (t_min / 1000)) / 100000; // Convert to bar
+                } else if (headType === 'conical') {
+                    p_max = (2 * stress * efficiency * (t_min / 1000) * Math.cos(angle)) / (diameter + 1.2 * (t_min / 1000) * Math.cos(angle)) / 100000; // Convert to bar
+                }
+            }
+            return p_max;
+        }
+
         document.getElementById('calcForm').addEventListener('submit', function(event) {
             event.preventDefault();
 
@@ -187,59 +216,66 @@
             const efficiency = parseFloat(document.getElementById('efficiency').value);
             const corrosionAllowance = parseFloat(document.getElementById('corrosion').value) / 1000; // Convert mm to m
 
-            let t_min, p_max;
+            let t_min, t_min_with_corrosion;
 
             if (calculationType === 'shell') {
-                // Calculation for shell
                 let t1 = (pressure * radius) / (stress * efficiency - 0.6 * pressure);
-                let p1 = (stress * efficiency * t1) / (radius + 0.6 * t1);
-
                 let t2 = (pressure * radius) / (2 * stress * efficiency + 0.4 * pressure);
-                let p2 = (2 * stress * efficiency * t2) / (radius - 0.4 * t2);
-
-                t_min = (Math.max(t1, t2) + corrosionAllowance) * 1000; // Convert to mm and add corrosion allowance
-                p_max = Math.min(
-                    (stress * efficiency * (t_min / 1000)) / (radius + 0.6 * (t_min / 1000)),
-                    (2 * stress * efficiency * (t_min / 1000)) / (radius - 0.4 * (t_min / 1000))
-                ) / 100000; // Convert to bar
-
+                t_min = Math.max(t1, t2) * 1000; // Convert to mm without adding corrosion allowance
+                t_min_with_corrosion = t_min + corrosionAllowance * 1000; // Convert to mm and add corrosion allowance
             } else if (calculationType === 'head') {
                 const headType = document.getElementById('headType').value;
-
                 if (headType === 'ellipsoidal') {
-                    // Calculation for ellipsoidal head
-                    t_min = ((pressure * diameter) / (2 * stress * efficiency - 0.2 * pressure) + corrosionAllowance) * 1000; // Convert to mm and add corrosion allowance
-                    p_max = (2 * stress * efficiency * (t_min / 1000)) / (diameter + 0.2 * (t_min / 1000)) / 100000; // Convert to bar
-
+                    t_min = ((pressure * diameter) / (2 * stress * efficiency - 0.2 * pressure)) * 1000; // Convert to mm without adding corrosion allowance
+                    t_min_with_corrosion = t_min + corrosionAllowance * 1000; // Convert to mm and add corrosion allowance
                 } else if (headType === 'torispherical') {
-                    // Calculation for torispherical head
-                    t_min = ((0.885 * pressure * diameter) / (stress * efficiency - 0.1 * pressure) + corrosionAllowance) * 1000; // Convert to mm and add corrosion allowance
-                    p_max = (stress * efficiency * (t_min / 1000)) / (0.885 * diameter + 0.1 * (t_min / 1000)) / 100000; // Convert to bar
-
+                    t_min = ((0.885 * pressure * diameter) / (stress * efficiency - 0.1 * pressure)) * 1000; // Convert to mm without adding corrosion allowance
+                    t_min_with_corrosion = t_min + corrosionAllowance * 1000; // Convert to mm and add corrosion allowance
                 } else if (headType === 'hemispherical') {
-                    // Calculation for hemispherical head
-                    t_min = ((pressure * radius) / (2 * stress * efficiency - 0.2 * pressure) + corrosionAllowance) * 1000; // Convert to mm and add corrosion allowance
-                    p_max = (2 * stress * efficiency * (t_min / 1000)) / (radius + 0.2 * (t_min / 1000)) / 100000; // Convert to bar
-
+                    t_min = ((pressure * radius) / (2 * stress * efficiency - 0.2 * pressure)) * 1000; // Convert to mm without adding corrosion allowance
+                    t_min_with_corrosion = t_min + corrosionAllowance * 1000; // Convert to mm and add corrosion allowance
                 } else if (headType === 'conical') {
-                    // Calculation for conical head
                     const angle = parseFloat(document.getElementById('angle').value) * (Math.PI / 180); // Convert degrees to radians
-                    t_min = ((pressure * diameter) / (2 * Math.cos(angle) * (stress * efficiency - 0.6 * pressure)) + corrosionAllowance) * 1000; // Convert to mm and add corrosion allowance
-                    p_max = (2 * stress * efficiency * (t_min / 1000) * Math.cos(angle)) / (diameter + 1.2 * (t_min / 1000) * Math.cos(angle)) / 100000; // Convert to bar
+                    t_min = ((pressure * diameter) / (2 * Math.cos(angle) * (stress * efficiency - 0.6 * pressure))) * 1000; // Convert to mm without adding corrosion allowance
+                    t_min_with_corrosion = t_min + corrosionAllowance * 1000; // Convert to mm and add corrosion allowance
                 }
             }
+
+            const p_max = calculateMAWP(t_min, diameter, radius, stress, efficiency, corrosionAllowance, calculationType, document.getElementById('headType').value, parseFloat(document.getElementById('angle').value) * (Math.PI / 180));
 
             document.getElementById('results').style.display = 'block';
             document.getElementById('results').innerHTML = `
                 <h3>Results</h3>
-                <p>Minimum Thickness (including corrosion allowance): ${t_min.toFixed(2)} mm</p>
+                <p>Minimum Thickness (including corrosion allowance): ${t_min_with_corrosion.toFixed(2)} mm</p>
                 <p>Maximum Allowable Working Pressure: ${p_max.toFixed(2)} bar</p>
+            `;
+
+            document.getElementById('finalThicknessForm').style.display = 'block';
+        });
+
+        document.getElementById('recalculateButton').addEventListener('click', function() {
+            const finalThickness = parseFloat(document.getElementById('finalThickness').value);
+
+            const calculationType = document.getElementById('calculationType').value;
+            const diameter = parseFloat(document.getElementById('diameter').value) / 1000; // Convert mm to m
+            const radius = diameter / 2; // Convert diameter to radius
+            const stress = parseFloat(document.getElementById('stress').value) * 1000000; // Convert MPa to Pa
+            const efficiency = parseFloat(document.getElementById('efficiency').value);
+            const corrosionAllowance = parseFloat(document.getElementById('corrosion').value) / 1000; // Convert mm to m
+
+            const p_max = calculateMAWP(finalThickness, diameter, radius, stress, efficiency, corrosionAllowance, calculationType, document.getElementById('headType').value, parseFloat(document.getElementById('angle').value) * (Math.PI / 180));
+
+            document.getElementById('results').innerHTML += `
+                <h3>Recalculated Results with Final Thickness</h3>
+                <p>Final Thickness: ${finalThickness.toFixed(2)} mm</p>
+                <p>Recalculated Maximum Allowable Working Pressure: ${p_max.toFixed(2)} bar</p>
             `;
         });
 
         document.getElementById('resetButton').addEventListener('click', function() {
             document.getElementById('calcForm').reset();
             document.getElementById('results').style.display = 'none';
+            document.getElementById('finalThicknessForm').style.display = 'none';
             document.getElementById('headTypeGroup').style.display = 'none';
             document.getElementById('angleGroup').style.display = 'none';
         });
